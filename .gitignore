@@ -1,0 +1,29 @@
+# Dados e credenciais locais
+.env
+.env.*
+!.env.example
+**/options.json
+**/audit.jsonl
+**/board_order.json
+**/secrets.yaml
+**/secrets.yml
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*token*.txt
+**/*credential*.json
+**/*backup*/
+**/*.sqlite
+**/*.sqlite-*
+
+# Arquivos temporários
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+Thumbs.db
+*.log
+*.bak
+*.tmp
