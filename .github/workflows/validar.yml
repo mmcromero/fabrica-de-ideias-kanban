@@ -1,0 +1,75 @@
+name: "Fabrica de Ideias Kanban - Validar fonte"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kanban-validacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Verificar codigo e build local
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Obter codigo-fonte
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validar manifesto, versao, arquivos e Python
+        run: python3 -B scripts/verificar-fonte.py
+
+      - name: Conferir arquivos versionados e interface
+        shell: bash
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import ast
+          import re
+          import subprocess
+
+          root = Path.cwd()
+          tracked = [
+              Path(name.decode("utf-8"))
+              for name in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
+              if name
+          ]
+          forbidden = {"options.json", "audit.jsonl", "board_order.json", "secrets.yaml", "secrets.yml"}
+          patterns = {
+              "token GitHub classico": re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),
+              "token GitHub granular": re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+              "chave privada": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+          }
+          text_exts = {".py", ".yaml", ".yml", ".html", ".md", ".json", ".txt"}
+          for relative in tracked:
+              name = relative.name
+              if name in forbidden or (name.startswith(".env") and name != ".env.example"):
+                  raise SystemExit(f"Arquivo sensivel versionado: {relative}")
+              if relative.suffix in text_exts or name in {".gitignore", "Dockerfile"}:
+                  source = (root / relative).read_text(encoding="utf-8")
+                  for label, regex in patterns.items():
+                      if regex.search(source):
+                          raise SystemExit(f"Possivel {label} no arquivo {relative}")
+          for file in (root / "kanban/server.py", root / "scripts/verificar-fonte.py"):
+              ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+          html = (root / "kanban/public/index.html").read_text(encoding="utf-8").lower()
+          if not all(marker in html for marker in ("<!doctype html>", "<script", "</html>")):
+              raise SystemExit("Estrutura HTML principal incompleta")
+          print(f"OK: {len(tracked)} arquivos rastreados verificados; Python e HTML basico validos")
+          PY
+
+      - name: Construir imagem Docker de validacao
+        run: docker build --tag kanban-validacao:local ./kanban
+
+      - name: Verificar arquivos na imagem (sem executar servidor)
+        run: |
+          docker run --rm --entrypoint python3 kanban-validacao:local -c             "from pathlib import Path; import ast; s=Path('/app/server.py'); h=Path('/app/public/index.html'); assert s.is_file() and h.is_file(); ast.parse(s.read_text()); print('OK: imagem contem servidor e interface')"
