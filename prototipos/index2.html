@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artesão Digital — Kanban v6 (simulado)</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#0c111b;color:#edf2fa}*{box-sizing:border-box}body{margin:0;min-height:100vh}header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid #273145;background:#111827}h1{font-size:19px;margin:0}small,.muted{color:#aab5c7}.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}input,button{font:inherit;border:1px solid #36445d;border-radius:9px;background:#1b2638;color:#edf2fa;padding:9px 11px}input{min-width:190px}button{cursor:pointer}button:hover{background:#2a3b56}button:focus-visible,input:focus-visible,.issue:focus-visible{outline:2px solid #8cb5ff;outline-offset:2px}.banner{font-size:12px;color:#d9c58d;padding:8px 20px;background:#2b271c;border-bottom:1px solid #534729}.board{display:flex;align-items:stretch;gap:14px;overflow-x:auto;padding:18px 20px;height:calc(100vh - 146px);min-height:400px;scrollbar-color:#465570 #141d2a}.lane{flex:0 0 340px;width:340px;min-width:340px;background:#151d2b;border:1px solid #2b3549;border-radius:13px;display:flex;flex-direction:column;min-height:0;overflow:hidden}.lane-head{padding:14px 13px 12px;border-top:4px solid var(--lane);border-bottom:1px solid #2b3549;display:flex;justify-content:space-between;align-items:center;gap:8px}.lane-head h2{font-size:14px;margin:0}.count{border-radius:999px;background:#2c384c;padding:3px 8px;font-size:12px}.stack{padding:10px;overflow-y:auto;overflow-anchor:none;flex:1;min-height:0;scrollbar-color:#45546b #151d2b}.issue{background:#202b3d;border:1px solid #344157;border-radius:10px;padding:12px;margin-bottom:9px;cursor:grab;user-select:none;transition:border-color .12s,background .12s}.issue:hover{border-color:#61789c}.issue.selected{outline:2px solid #82aaff;background:#283b55}.issue.dragging{opacity:.45}.issue .number{color:#b7c7de;font-size:12px;font-weight:650}.issue .title{font-size:13px;font-weight:600;line-height:1.38;margin:5px 0 9px;overflow-wrap:anywhere}.labels{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.tag{font-size:8.5px;line-height:1.25;padding:4px;border-radius:5px;font-weight:700;overflow-wrap:anywhere;max-width:100%;background:#3c4657;color:#e6ebf5}.tag.origin{background:#49336d;color:#e9d7ff}.tag.dest{background:#234b77;color:#d6eaff}.tag.action{background:#6b3c21;color:#ffe1c9}.tag.pending{background:#712e3c;color:#ffe0e5}.tag.allowed{background:#255e42;color:#d4ffe4}.card-bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}.card-bottom a{color:#a8c8ff;font-size:11px;text-decoration:none}.card-bottom a:hover{text-decoration:underline}.drop{height:7px;border-radius:6px;margin:3px 0}.drop.active{height:25px;background:#547bb66b;border:2px dashed #91baff}.lane.target{border-color:#8eb7ff}.footer{padding:8px 20px;display:flex;justify-content:space-between;gap:12px;align-items:center;border-top:1px solid #273145;background:#111827;min-height:47px;font-size:12px}.switch{display:flex;gap:7px;align-items:center}.switch input{min-width:0;accent-color:#6e9fff}.empty{font-size:12px;color:#aab5c7;padding:12px}.error{color:#ffb9b9;padding:22px}.hidden{display:none}@media(max-width:700px){header{padding:12px}h1{font-size:17px}.banner{padding:8px 12px}.board{padding:12px;gap:10px;height:calc(100dvh - 185px)}.lane{flex-basis:300px;width:300px;min-width:300px}.footer{padding:9px 12px;flex-wrap:wrap}input[type=search]{min-width:130px;width:160px}}
+</style>
+</head>
+<body>
+<header><div><h1>Artesão Digital · Kanban</h1><small>Protótipo v6 · dados simulados</small></div><div class="tools"><input id="search" type="search" placeholder="Pesquisar cartão ou etiqueta" aria-label="Pesquisar cartões"><button id="restore" type="button">Restaurar ordem</button></div></header>
+<div class="banner">AMBIENTEeeeee DE TESTE · Esta página é pública pela rota /local/. Não inserir dados reais, credenciais ou tokens.</div>
+<main id="board" class="board" aria-label="Quadro Kanban"></main>
+<footer class="footer"><span id="status" aria-live="polite">Carregando dados simulados…</span><label class="switch"><input id="dragMode" type="checkbox" checked> Arrastar e soltar <span class="muted">(desmarque para selecionar e clicar)</span></label></footer>
+<script>
+'use strict';
+(()=>{
+ const board=document.getElementById('board'),status=document.getElementById('status'),search=document.getElementById('search'),toggle=document.getElementById('dragMode');
+ const base='https://github.com/mmcromero/fabricacao_e_orcamentos/issues/';
+ let columns=[],initial=[],cards=[],selected=null,dragged=null,slot=null;
+ const safe=s=>String(s??'');
+ const kind=s=>s.startsWith('origem:')?'origin':s.startsWith('destino:')?'dest':s.startsWith('acao:')?'action':s.startsWith('pendencia:')?'pending':s.startsWith('liberado-')?'allowed':'';
+ const labelsOf=c=>Array.isArray(c.etiquetas)?c.etiquetas:[];
+ const orderedLabels=c=>{const tags=labelsOf(c);const top=['origem:','destino:','acao:'];return [top.flatMap(p=>tags.filter(t=>t.startsWith(p))),tags.filter(t=>!top.some(p=>t.startsWith(p)))];};
+ function makeCard(c){
+  const el=document.createElement('article');el.className='issue';el.tabIndex=0;el.dataset.id=String(c.numero);el.draggable=toggle.checked;el.setAttribute('aria-label',`Issue ${c.numero}: ${c.titulo}`);
+  const n=document.createElement('div');n.className='number';n.textContent='#'+c.numero;el.append(n);
+  const title=document.createElement('div');title.className='title';title.textContent=safe(c.titulo);el.append(title);
+  for(const group of orderedLabels(c)){if(!group.length)continue;const line=document.createElement('div');line.className='labels';for(const t of group){const span=document.createElement('span');span.className='tag '+kind(t);span.textContent=t;line.append(span);}el.append(line);}
+  const bottom=document.createElement('div');bottom.className='card-bottom';const a=document.createElement('a');a.href=base+encodeURIComponent(c.numero);a.target='_blank';a.rel='noopener noreferrer';a.textContent='Abrir Issue no GitHub';a.addEventListener('click',e=>e.stopPropagation());bottom.append(a);el.append(bottom);
+  const activate=()=>{if(toggle.checked)return;selected=selected===c.numero?null:c.numero;render();};
+  el.addEventListener('click',e=>{if(e.target.closest('a'))return;activate();});el.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('a')){e.preventDefault();activate();}});
+  if(selected===c.numero)el.classList.add('selected');
+  el.addEventListener('dragstart',e=>{if(!toggle.checked){e.preventDefault();return;}dragged=c.numero;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(c.numero));});
+  el.addEventListener('dragend',()=>{if(dragged!==null){dragged=null;slot?.remove();slot=null;render();}});
+  return el;
+ }
+ function move(id,target,index){const from=cards.findIndex(c=>c.numero===id);if(from<0)return;const [item]=cards.splice(from,1);item.coluna=target;const others=cards.filter(c=>c.coluna===target);const before=others[index];if(before){cards.splice(cards.indexOf(before),0,item);}else{let last=-1;cards.forEach((c,i)=>{if(c.coluna===target)last=i;});cards.splice(last+1,0,item);}selected=null;dragged=null;slot=null;render();}
+ function render(){
+  const x=board.scrollLeft;const ys=new Map([...board.querySelectorAll('.stack')].map(s=>[Number(s.dataset.col),s.scrollTop]));
+  const q=search.value.trim().toLocaleLowerCase('pt-BR');board.replaceChildren();
+  columns.forEach((col,i)=>{
+   const lane=document.createElement('section');lane.className='lane';lane.style.setProperty('--lane',col.cor||'#8B5CF6');
+   const head=document.createElement('div');head.className='lane-head';const h=document.createElement('h2');h.textContent=col.nome;const count=document.createElement('span');count.className='count';const all=cards.filter(c=>c.coluna===i);const shown=all.filter(c=>!q||('#'+c.numero+' '+c.titulo+' '+labelsOf(c).join(' ')).toLocaleLowerCase('pt-BR').includes(q));count.textContent=shown.length;head.append(h,count);lane.append(head);
+   const stack=document.createElement('div');stack.className='stack';stack.dataset.col=String(i);
+   if(!toggle.checked&&selected!==null){lane.classList.add('target');head.title='Clique para mover o cartão selecionado para esta coluna';head.style.cursor='pointer';head.addEventListener('click',()=>move(selected,i,all.length));}
+   if(!shown.length){const empty=document.createElement('p');empty.className='empty';empty.textContent=q?'Nenhum cartão encontrado':'Nenhum cartão';stack.append(empty);}
+   shown.forEach((c,j)=>{const el=makeCard(c);if(!toggle.checked&&selected!==null){el.title='Clique para posicionar o cartão selecionado antes deste cartão';const orig=el.onclick;el.addEventListener('click',e=>{if(e.target.closest('a')||selected===null||selected===c.numero)return;e.stopImmediatePropagation();move(selected,i,all.findIndex(a=>a.numero===c.numero));},true);}stack.append(el);});
+   stack.addEventListener('dragover',e=>{if(dragged===null||!toggle.checked||q)return;e.preventDefault();e.dataTransfer.dropEffect='move';if(!slot){slot=document.createElement('div');slot.className='drop active';}const els=[...stack.querySelectorAll('.issue:not(.dragging)')];const before=els.find(el=>e.clientY<el.getBoundingClientRect().top+el.getBoundingClientRect().height/2);if(before)stack.insertBefore(slot,before);else stack.append(slot);});
+   stack.addEventListener('drop',e=>{if(dragged===null||q)return;e.preventDefault();const id=dragged;const els=[...stack.querySelectorAll('.issue')].filter(el=>Number(el.dataset.id)!==id);const index=slot?[...stack.children].filter(el=>el.classList.contains('issue')&&Number(el.dataset.id)!==id&&el.compareDocumentPosition(slot)&Node.DOCUMENT_POSITION_FOLLOWING).length:els.length;move(id,i,index);});
+   lane.append(stack);board.append(lane);
+  });
+  board.scrollLeft=x;board.querySelectorAll('.stack').forEach(s=>{s.scrollTop=ys.get(Number(s.dataset.col))||0;});
+  status.textContent=`${cards.length} cartões simulados · ${columns.length} colunas · ${toggle.checked?'arrastar e soltar':'selecionar e clicar'}${q?' · filtro ativo':''}`;
+ }
+ search.addEventListener('input',render);toggle.addEventListener('change',()=>{selected=null;dragged=null;render();});document.getElementById('restore').addEventListener('click',()=>{cards=initial.map(c=>({...c,etiquetas:[...labelsOf(c)]}));selected=null;search.value='';render();});
+ fetch('./mock.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json();}).then(data=>{
+  if(!Array.isArray(data.colunas)||!Array.isArray(data.cartoes)||data.colunas.length!==6)throw Error('Estrutura do mock.json inesperada');
+  columns=data.colunas;initial=data.cartoes.map(c=>({...c,etiquetas:[...labelsOf(c)]}));cards=initial.map(c=>({...c,etiquetas:[...labelsOf(c)]}));render();
+ }).catch(err=>{status.textContent='Falha ao carregar JSON';board.innerHTML='';const p=document.createElement('p');p.className='error';p.textContent='Não foi possível ler ./mock.json: '+err.message;board.append(p);});
+})();
+</script>
+</body></html>

@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Fabrica de Ideias · Kanban</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#0c111b;color:#edf2fa}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 20px;background:#111827;border-bottom:1px solid #273145;flex:0 0 auto}
+h1{font-size:18px;margin:0}
+small,.muted{color:#aab5c7;font-size:12px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+input,button,select,textarea{font:inherit;border:1px solid #36445d;border-radius:9px;background:#1b2638;color:#edf2fa;padding:8px 10px}
+button{cursor:pointer}
+button:hover:not(:disabled){background:#2a3b56}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.card:focus-visible,.tab:focus-visible{outline:2px solid #8cb5ff;outline-offset:2px}
+.primary{background:#315eaa;border-color:#527eca}
+.tabs{flex:0 0 auto;display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding:10px 20px 0;background:#0f1624;border-bottom:1px solid #273145}
+.tab{flex:0 0 auto;border-radius:10px 10px 0 0;border-bottom:none;background:#1b2638;padding:8px 14px;color:#aab5c7;cursor:grab;user-select:none}
+.tab.active{background:#151d2b;color:#edf2fa;border-color:#527eca;box-shadow:inset 0 2px 0 #527eca}
+.tab.over{box-shadow:inset 2px 0 0 #91baff}
+.tab.dragging{opacity:.4}
+.tab.add{color:#9db1ce;border-style:dashed;cursor:pointer}
+.board{flex:1 1 auto;min-height:0;display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:18px 20px}
+.lane{flex:0 0 300px;width:300px;background:#151d2b;border:1px solid #2b3549;border-radius:13px;display:flex;flex-direction:column;min-height:0}
+.lane.over{box-shadow:inset 0 0 0 2px #91baff}
+.lane-head{padding:12px;border-bottom:1px solid #2b3549;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lane-head h2{font-size:14px;margin:0}
+.count{background:#2c384c;border-radius:999px;padding:2px 8px;font-size:12px}
+.stack{padding:10px;overflow-y:auto;flex:1;min-height:60px}
+.card{background:#202b3d;border:1px solid #344157;border-radius:10px;padding:10px;margin-bottom:8px;cursor:grab;user-select:none}
+.card:hover{border-color:#61789c}
+.card.over{border-color:#91baff}
+.card.dragging{opacity:.4}
+.card .n{font-size:11px;color:#b7c7de;font-weight:650}
+.card .t{font-size:13px;font-weight:600;margin:4px 0 8px;overflow-wrap:anywhere;line-height:1.35}
+.card-foot{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.card a{color:#a8c8ff;font-size:11px}
+.card .btns{display:flex;gap:4px}
+.card .mv{font-size:11px;padding:4px 8px}
+.card .eye{font-size:13px;padding:2px 7px}
+.draft{font-size:11px;color:#d2a45a}
+.footer{flex:0 0 auto;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 20px;background:#111827;border-top:1px solid #273145;font-size:12px}
+.ok{color:#b1efd0}.err{color:#ffb9b9}.busy{color:#f1dba2}
+.dialog{border:1px solid #526681;border-radius:14px;background:#182335;color:#edf2fa;width:min(680px,calc(100vw - 24px));padding:20px;box-shadow:0 24px 100px #000a}
+.dialog::backdrop{background:#0009}
+.dhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+.dhead h2{margin:0;font-size:17px}
+.x{width:36px;height:36px;padding:0;font-size:22px;line-height:1;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.dialog label{display:block;font-size:12px;margin:12px 0 6px}
+.dialog textarea,.dialog select{width:100%}
+.dialog textarea{min-height:70px;resize:vertical}
+.dialog input[type=text]{width:100%}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #2b3549}
+.row input[type=text]{flex:1 1 180px;min-width:140px}
+.sw-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sw{width:28px;height:28px;border-radius:50%;padding:0;border:2px solid #1b2638;min-width:0}
+.sw.on{outline:2px solid #fff;outline-offset:2px}
+.row .mini{padding:6px 10px}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+.tip{font-size:11px;color:#9db1ce;line-height:1.4}
+.empty{font-size:12px;color:#aab5c7;padding:10px}
+/* Janela de visualização: quase tela cheia */
+.dialog:not([open]){display:none}
+.viewer[open]{display:flex;flex-direction:column;width:calc(100vw - 32px);height:calc(100vh - 32px);max-width:none;max-height:none;margin:16px;padding:0}
+.viewer-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 22px;border-bottom:1px solid #2b3549}
+.viewer-head h2{margin:0;font-size:20px;overflow-wrap:anywhere}
+.viewer-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:12px;color:#b7c7de}
+.viewer-meta span{background:#202b3d;border:1px solid #344157;border-radius:999px;padding:3px 10px}
+.viewer-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 22px}
+.viewer-body pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px;line-height:1.55;margin:0}
+.viewer-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 22px;border-top:1px solid #2b3549}
+.viewer-foot a{color:#a8c8ff;font-size:13px}
+.viewer .x{width:40px;height:40px}
+.viewer .notice{font-size:12px;color:#d2a45a;margin-bottom:12px}
+.loading{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#aab5c7;font-size:14px}
+.spinner{width:36px;height:36px;border:3px solid #2b3549;border-top-color:#8cb5ff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation-duration:3s}}
+.add-card{width:100%;margin-top:4px;border-style:dashed;color:#9db1ce}
+@media(max-width:700px){.lane{flex-basis:270px;width:270px}.footer{padding:8px 12px}.viewer{width:calc(100vw - 16px);height:calc(100vh - 16px);margin:8px}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Fabrica de Ideias · Kanban</h1><small>GitHub Projects V2 · versão <span id="ver">…</span></small></div>
+  <div class="tools">
+    <input id="search" type="search" placeholder="Pesquisar cartão" aria-label="Pesquisar cartões">
+    <button id="addCard" type="button" class="primary">+ Novo card</button>
+    <button id="cols" type="button">Colunas</button>
+    <button id="refresh" type="button">Atualizar do GitHub</button>
+  </div>
+</header>
+
+<nav id="tabs" class="tabs" aria-label="Quadros"></nav>
+
+<main id="board" class="board" aria-label="Quadro Kanban"></main>
+
+<footer class="footer">
+  <span id="status" aria-live="polite">Carregando…</span>
+  <span class="muted">Arraste um card para outra coluna ou solte sobre outro card para ordenar. Arraste uma aba para mudar a ordem dos quadros.</span>
+</footer>
+
+<dialog id="viewDlg" class="dialog viewer" aria-labelledby="viewTitle">
+  <div class="viewer-head">
+    <div>
+      <h2 id="viewTitle"></h2>
+      <div class="viewer-meta" id="viewMeta"></div>
+    </div>
+    <button type="button" class="x" data-close="viewDlg" aria-label="Fechar">×</button>
+  </div>
+  <div class="viewer-body">
+    <p id="viewNotice" class="notice" hidden></p>
+    <pre id="viewBody"></pre>
+  </div>
+  <div class="viewer-foot">
+    <a id="viewLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Abrir no GitHub</a>
+    <button type="button" data-close="viewDlg">Fechar</button>
+  </div>
+</dialog>
+
+<dialog id="newDlg" class="dialog">
+  <form id="newForm">
+    <div class="dhead"><h2>Novo quadro</h2><button type="button" class="x" data-close="newDlg" aria-label="Fechar">×</button></div>
+    <p class="tip">O quadro é criado no GitHub com as colunas A fazer, Em execução e Concluído. Não pode haver outro quadro com o mesmo nome.</p>
+    <label for="newName">Nome do quadro</label>
+    <input id="newName" type="text" maxlength="100" required>
+    <div class="actions">
+      <button type="button" id="newCancel">Cancelar</button>
+      <button type="submit" class="primary">Criar no GitHub</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="moveDlg" class="dialog">
+  <form id="moveForm">
+    <div class="dhead"><h2>Mover card</h2><button type="button" class="x" data-close="moveDlg" aria-label="Fechar">×</button></div>
+    <p id="moveInfo" class="tip"></p>
+    <label for="mvTo">Coluna de destino</label>
+    <select id="mvTo"></select>
+    <label for="mvEv">Evidência (exigida por algumas colunas)</label>
+    <textarea id="mvEv" maxlength="3000"></textarea>
+    <label for="mvReason">Motivo (exigido ao sair de algumas colunas)</label>
+    <textarea id="mvReason" maxlength="1500"></textarea>
+    <div class="actions">
+      <button type="button" id="mvCancel">Cancelar</button>
+      <button type="submit" class="primary">Gravar no GitHub</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="cardDlg" class="dialog">
+  <form id="cardForm">
+    <div class="dhead"><h2>Novo card</h2><button type="button" class="x" data-close="cardDlg" aria-label="Fechar">×</button></div>
+    <label for="cardCol">Coluna</label>
+    <select id="cardCol"></select>
+    <label for="cardTitle">Título</label>
+    <input id="cardTitle" type="text" maxlength="200" required>
+    <label for="cardBody">Descrição (opcional)</label>
+    <textarea id="cardBody" maxlength="5000"></textarea>
+    <div class="actions">
+      <button type="button" id="cardCancel">Cancelar</button>
+      <button type="submit" class="primary">Criar card</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="colDlg" class="dialog">
+  <form id="colForm">
+    <div class="dhead"><h2>Colunas do quadro</h2><button type="button" class="x" data-close="colDlg" aria-label="Fechar">×</button></div>
+    <p class="tip">Não é possível apagar uma coluna que ainda tenha cards: mova-os antes.</p>
+    <div id="colList"></div>
+    <div class="row">
+      <input id="colNew" type="text" maxlength="40" placeholder="Nome da nova coluna" aria-label="Nome da nova coluna">
+      <button type="button" id="colAdd">Adicionar</button>
+    </div>
+    <div class="actions">
+      <button type="button" id="colCancel">Cancelar</button>
+      <button type="submit" class="primary">Salvar colunas</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+(()=>{
+  const COLORS={BLUE:'#4f85de',YELLOW:'#e6a14a',GREEN:'#61bc81',PURPLE:'#b48aed',ORANGE:'#e08a4a',RED:'#e0655f',PINK:'#e87fb4',GRAY:'#64748b'};
+  const SWATCHES=['GRAY','BLUE','GREEN','YELLOW','ORANGE','RED','PINK','PURPLE'];
+  const MAX_COLUMNS=20;
+  const $=id=>document.getElementById(id);
+  const el=(tag,props={},...kids)=>{const n=document.createElement(tag);Object.assign(n,props);n.append(...kids);return n;};
+
+  let board={columns:[],rules:{},items:[],version:''};
+  let boards=[], currentId=null;
+  let dragId=null, dragTab=null, busy=false, loading=false, lastFetch=0, lastError='';
+  let pending=null, colDraft=[];
+
+  const findItem=id=>board.items.find(i=>i.id===id);
+  const setStatus=(text,type='')=>{const s=$('status');s.textContent=text;s.className=type;};
+
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
+
+  async function api(path,body){
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),25000);
+    try{
+      const r=await fetch(path,{
+        method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',signal:ctrl.signal,
+        headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest',...(body?{'Content-Type':'application/json'}:{})},
+        body:body?JSON.stringify(body):undefined
+      });
+      let data;
+      try{data=await r.json();}catch{throw new Error('Resposta inválida do servidor');}
+      if(!r.ok||data.success===false)throw new Error(data.error||('HTTP '+r.status));
+      return data;
+    }catch(err){
+      if(err.name==='AbortError')throw new Error('Tempo limite. Atualize e tente de novo.');
+      throw err;
+    }finally{clearTimeout(timer);}
+  }
+
+  function setBusy(value,msg){
+    busy=value;
+    $('refresh').disabled=value;
+    if(msg)setStatus(msg,'busy');
+    render();
+  }
+
+  function renderTabs(){
+    const nav=$('tabs');
+    nav.replaceChildren();
+    for(const b of boards){
+      const active=b.id===currentId;
+      const t=el('button',{type:'button',className:'tab'+(active?' active':''),textContent:b.title,
+        draggable:!busy,'aria-pressed':String(active)});
+      t.dataset.id=b.id;
+      t.addEventListener('click',()=>{
+        if(busy||b.id===currentId)return;
+        currentId=b.id;renderTabs();
+        board={columns:[],rules:{},items:[],version:board.version};
+        showLoading('Carregando quadro…');
+        load();
+      });
+      t.addEventListener('dragstart',e=>{
+        dragTab=b.id;t.classList.add('dragging');
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain',b.id);
+      });
+      t.addEventListener('dragend',()=>{
+        dragTab=null;t.classList.remove('dragging');
+        document.querySelectorAll('.tab.over').forEach(n=>n.classList.remove('over'));
+      });
+      t.addEventListener('dragover',e=>{
+        if(!dragTab||dragTab===b.id)return;
+        e.preventDefault();t.classList.add('over');
+      });
+      t.addEventListener('dragleave',()=>t.classList.remove('over'));
+      t.addEventListener('drop',e=>{
+        e.preventDefault();t.classList.remove('over');
+        const from=dragTab;dragTab=null;
+        if(!from||from===b.id||busy)return;
+        moveTab(from,b.id);
+      });
+      nav.append(t);
+    }
+    const add=el('button',{type:'button',className:'tab add',textContent:'+ Novo quadro'});
+    add.disabled=busy;
+    add.addEventListener('click',()=>{if(!busy){$('newName').value='';$('newDlg').showModal();$('newName').focus();}});
+    nav.append(add);
+  }
+
+  async function moveTab(fromId,toId){
+    const ids=boards.map(b=>b.id);
+    const from=ids.indexOf(fromId), to=ids.indexOf(toId);
+    if(from<0||to<0)return;
+    ids.splice(from,1);
+    ids.splice(to,0,fromId);
+    boards=ids.map(id=>boards.find(b=>b.id===id));
+    renderTabs();
+    setBusy(true,'Gravando ordem dos quadros…');
+    try{
+      await api('./api/projects/order',{projects:ids});
+      setStatus('Ordem dos quadros gravada','ok');
+    }catch(err){
+      setStatus('Ordem não gravada: '+err.message,'err');
+    }finally{
+      setBusy(false);
+      await loadBoards();
+      renderTabs();
+    }
+  }
+
+  async function loadBoards(){
+    const r=await api('./api/projects');
+    boards=r.projects||[];
+    if(!boards.some(b=>b.id===currentId))currentId=r.default||(boards[0]&&boards[0].id)||null;
+    $('ver').textContent=r.version||'?';
+    renderTabs();
+  }
+
+  let reloadAgain=false;
+  async function load(){
+    if(loading){reloadAgain=true;return;}
+    loading=true;
+    try{
+      await loadBoards();
+      const requested=currentId;
+      if(!currentId){
+        board={columns:[],rules:{},items:[],version:board.version};
+        lastError='Nenhum quadro visível';
+        render();
+        setStatus('Nenhum quadro visível. Crie um pelo botão + Novo quadro.','err');
+        return;
+      }
+      if(!board.columns.length)showLoading('Carregando quadro…');
+      const data=await api('./api/board?project='+encodeURIComponent(requested));
+      if(requested!==currentId)return;
+      board=data;
+      board.rules=board.rules||{};
+      $('ver').textContent=board.version||'?';
+      lastError='';lastFetch=Date.now();
+      render();
+      setStatus(`${board.items.length} cards · ${board.columns.length} colunas`,'ok');
+    }catch(err){
+      lastError=err.message;
+      render();
+      setStatus('Sem sincronização com o GitHub: '+lastError,'err');
+    }finally{
+      loading=false;
+      if(reloadAgain){reloadAgain=false;load();}
+    }
+  }
+
+  // Visualização do card: somente leitura, sem trocar de página.
+  async function openView(item){
+    if(busy)return;
+    const d=$('viewDlg');
+    $('viewTitle').textContent=item.title;
+    $('viewMeta').replaceChildren(el('span',{textContent:'Carregando…'}));
+    $('viewBody').textContent='';
+    $('viewNotice').hidden=true;
+    $('viewLink').hidden=true;
+    d.showModal();
+    try{
+      const c=await api('./api/card?project='+encodeURIComponent(currentId)+'&item='+encodeURIComponent(item.id));
+      $('viewTitle').textContent=c.title;
+      const meta=[];
+      if(c.kind==='issue'&&c.number)meta.push('#'+c.number);
+      meta.push(c.kind==='issue'?'Issue':'Rascunho');
+      meta.push('Coluna: '+c.column);
+      if(c.state)meta.push('Estado: '+(c.state==='OPEN'||c.state==='open'?'aberta':'fechada'));
+      if(c.assignees&&c.assignees.length)meta.push('Responsável: '+c.assignees.join(', '));
+      $('viewMeta').replaceChildren(...meta.map(t=>el('span',{textContent:t})));
+      if(c.labels&&c.labels.length){
+        $('viewMeta').append(...c.labels.map(l=>el('span',{textContent:'Etiqueta: '+l})));
+      }
+      if(c.body_error){
+        $('viewNotice').textContent='Corpo não carregado: '+c.body_error;
+        $('viewNotice').hidden=false;
+      }
+      $('viewBody').textContent=c.body||(c.body_error?'':'(sem descrição)');
+      if(c.url){$('viewLink').href=c.url;$('viewLink').hidden=false;}
+    }catch(err){
+      $('viewMeta').replaceChildren();
+      $('viewNotice').textContent='Não foi possível abrir o card: '+err.message;
+      $('viewNotice').hidden=false;
+    }
+  }
+  function showLoading(text){
+    $('board').replaceChildren(el('div',{className:'loading',role:'status'},
+      el('div',{className:'spinner'}),el('span',{textContent:text})));
+  }
+
+  function render(){
+    const root=$('board');
+    root.replaceChildren();
+    if(!board.columns.length){
+      if(lastError)root.append(el('p',{className:'empty',textContent:'Quadro indisponível: '+lastError}));
+      else showLoading('Carregando quadro…');
+      return;
+    }
+    const q=$('search').value.trim().toLowerCase();
+    const groups=board.columns.map(c=>({id:c.id,name:c.name,color:c.color}));
+    if(board.items.some(i=>!i.column_id))groups.push({id:null,name:'Sem status',color:null});
+    for(const g of groups){
+      const items=board.items.filter(i=>(i.column_id||null)===g.id&&
+        (!q||(i.title+' '+(i.number||'')).toLowerCase().includes(q)));
+      root.append(lane(g,items));
+    }
+  }
+
+  function lane(g,items){
+    const L=el('section',{className:'lane'});
+    L.style.borderTop='4px solid '+(COLORS[g.color]||'#64748b');
+    L.append(el('div',{className:'lane-head'},
+      el('h2',{textContent:g.name}),
+      el('span',{className:'count',textContent:String(items.length)})));
+    const stack=el('div',{className:'stack'});
+    if(!items.length)stack.append(el('p',{className:'empty',textContent:'Nenhum card'}));
+    items.forEach(i=>stack.append(card(i)));
+    if(g.id!==null){
+      const addBtn=el('button',{type:'button',className:'add-card',textContent:'+ Adicionar card',disabled:busy});
+      addBtn.addEventListener('click',()=>openCardDlg(g.id));
+      stack.append(addBtn);
+    }
+    stack.addEventListener('dragover',e=>{
+      if(!dragId||g.id===null)return;
+      e.preventDefault();L.classList.add('over');
+    });
+    stack.addEventListener('dragleave',e=>{if(!L.contains(e.relatedTarget))L.classList.remove('over');});
+    stack.addEventListener('drop',e=>{
+      e.preventDefault();L.classList.remove('over');
+      const src=findItem(dragId);dragId=null;
+      if(!src||g.id===null||busy)return;
+      dropOn(src,g.id,null);
+    });
+    L.append(stack);
+    return L;
+  }
+
+  function card(i){
+    const c=el('article',{className:'card',draggable:!busy,tabIndex:0});
+    c.setAttribute('aria-label',i.title);
+    c.append(el('div',{className:'n',textContent:i.kind==='issue'?'#'+i.number:'Rascunho'}));
+    c.append(el('div',{className:'t',textContent:i.title}));
+    const foot=el('div',{className:'card-foot'});
+    if(i.url){
+      foot.append(el('a',{href:i.url,target:'_blank',rel:'noopener noreferrer',textContent:'Abrir no GitHub'}));
+    }else{
+      foot.append(el('span',{className:'draft',textContent:'Rascunho'}));
+    }
+    const btns=el('div',{className:'btns'});
+    const eye=el('button',{type:'button',className:'eye',textContent:'👁️',title:'Visualizar',disabled:busy,'aria-label':'Visualizar card'});
+    eye.addEventListener('click',e=>{e.stopPropagation();openView(i);});
+    const moveBtn=el('button',{type:'button',className:'mv',textContent:'Mover',disabled:busy});
+    moveBtn.addEventListener('click',e=>{e.stopPropagation();openMove(i,null);});
+    btns.append(eye,moveBtn);
+    foot.append(btns);
+    c.append(foot);
+
+    c.addEventListener('dragstart',e=>{
+      dragId=i.id;c.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',i.id);
+    });
+    c.addEventListener('dragend',()=>{
+      dragId=null;c.classList.remove('dragging');
+      document.querySelectorAll('.over').forEach(n=>n.classList.remove('over'));
+    });
+    c.addEventListener('dragover',e=>{
+      if(!dragId||dragId===i.id)return;
+      e.preventDefault();e.stopPropagation();c.classList.add('over');
+    });
+    c.addEventListener('dragleave',()=>c.classList.remove('over'));
+    c.addEventListener('drop',e=>{
+      e.preventDefault();e.stopPropagation();c.classList.remove('over');
+      const src=findItem(dragId);dragId=null;
+      if(!src||src.id===i.id||busy)return;
+      dropOn(src,i.column_id,i.id);
+    });
+    return c;
+  }
+
+  function dropOn(src,colId,targetId){
+    if(busy||!colId)return;
+    const toRule=board.rules[colId]||{};
+    const fromRule=board.rules[src.column_id||'']||{};
+    if(src.column_id!==colId&&(toRule.requires_evidence||fromRule.requires_reason_when_leaving)){
+      openMove(src,colId);return;
+    }
+    const snapshot=board.items.map(i=>({...i}));
+    const prevCol=src.column_id;
+    const rest=board.items.filter(i=>i.id!==src.id);
+    src.column_id=colId;
+    const at=targetId?rest.findIndex(i=>i.id===targetId):-1;
+    if(at<0)rest.push(src);else rest.splice(at,0,src);
+    board.items=rest;
+    const inCol=board.items.filter(i=>i.column_id===colId);
+    const prev=inCol[inCol.indexOf(src)-1];
+    persistMove(src,prevCol,colId,prev?prev.id:null,snapshot);
+  }
+
+  async function persistMove(src,prevCol,colId,afterId,snapshot){
+    busy=true;setStatus('Gravando no GitHub…','busy');render();
+    try{
+      if(prevCol!==colId){
+        const r=await api('./api/move',{project:currentId,item_id:src.id,to_column_id:colId,expected_column_id:prevCol,evidence:'',reason:''});
+        if(!r.verified)throw new Error('GitHub não confirmou a coluna');
+      }
+      const r2=await api('./api/reorder',{project:currentId,item_id:src.id,after_item_id:afterId});
+      if(!r2.verified)throw new Error('GitHub não confirmou a ordem');
+      setStatus('Gravado e confirmado','ok');
+    }catch(err){
+      board.items=snapshot;
+      setStatus('Não gravado, card devolvido: '+err.message,'err');
+    }finally{
+      busy=false;render();await load();
+    }
+  }
+
+  function openMove(item,toId){
+    if(busy)return;
+    const from=board.columns.find(c=>c.id===item.column_id);
+    const choices=board.columns.filter(c=>c.id!==item.column_id);
+    if(!choices.length){setStatus('Não há outra coluna para este card','err');return;}
+    pending={item};
+    const sel=$('mvTo');
+    sel.replaceChildren();
+    for(const c of choices)sel.append(el('option',{value:c.id,textContent:c.name}));
+    if(toId&&choices.some(c=>c.id===toId))sel.value=toId;
+    $('mvEv').value='';$('mvReason').value='';
+    const label=item.kind==='issue'?'Issue #'+item.number:'Rascunho';
+    $('moveInfo').textContent=`${label} · ${item.title} · origem: ${from?from.name:'Sem status'}. O card só muda de lugar depois da confirmação do GitHub.`;
+    $('moveDlg').showModal();
+  }
+
+  $('moveForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(!pending||busy)return;
+    const item=pending.item;
+    const to=$('mvTo').value;
+    const ev=$('mvEv').value.trim();
+    const rs=$('mvReason').value.trim();
+    const toRule=board.rules[to]||{};
+    const fromRule=board.rules[item.column_id||'']||{};
+    if(toRule.requires_evidence&&!ev){setStatus('A coluna de destino exige evidência','err');$('mvEv').focus();return;}
+    if(fromRule.requires_reason_when_leaving&&!rs){setStatus('Sair desta coluna exige motivo','err');$('mvReason').focus();return;}
+    $('moveDlg').close();pending=null;
+    setBusy(true,'Gravando no GitHub…');
+    try{
+      const r=await api('./api/move',{project:currentId,item_id:item.id,to_column_id:to,expected_column_id:item.column_id,evidence:ev,reason:rs});
+      if(!r.verified)throw new Error('GitHub não confirmou a mudança');
+      setStatus('Card movido e confirmado no GitHub','ok');
+    }catch(err){
+      setStatus('Não confirmado: '+err.message,'err');
+    }finally{
+      setBusy(false);
+      await load();
+    }
+  });
+  $('mvCancel').addEventListener('click',()=>{pending=null;$('moveDlg').close();});
+
+  $('newForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const title=$('newName').value.trim();
+    if(!title||busy)return;
+    $('newDlg').close();
+    setBusy(true,'Criando quadro no GitHub…');
+    try{
+      const r=await api('./api/projects/create',{title});
+      currentId=r.project.id;
+      setStatus(r.aviso?('Quadro criado. '+r.aviso):'Quadro criado com colunas em português','ok');
+    }catch(err){
+      setStatus('Quadro não criado: '+err.message,'err');
+    }finally{
+      setBusy(false);
+      await load();
+    }
+  });
+  $('newCancel').addEventListener('click',()=>$('newDlg').close());
+
+  function countCards(colId){
+    return board.items.filter(i=>i.column_id===colId).length;
+  }
+
+  function drawCols(){
+    const list=$('colList');
+    list.replaceChildren();
+    list.append(el('p',{id:'colWarn',className:'err',textContent:''}));
+    colDraft.forEach((c,idx)=>{
+      const nameIn=el('input',{type:'text',value:c.name,maxLength:40,'aria-label':'Nome da coluna'});
+      nameIn.addEventListener('input',()=>{c.name=nameIn.value;});
+      const up=el('button',{type:'button',className:'mini',textContent:'↑',disabled:idx===0,title:'Subir'});
+      up.addEventListener('click',()=>{[colDraft[idx-1],colDraft[idx]]=[colDraft[idx],colDraft[idx-1]];drawCols();});
+      const down=el('button',{type:'button',className:'mini',textContent:'↓',disabled:idx===colDraft.length-1,title:'Descer'});
+      down.addEventListener('click',()=>{[colDraft[idx],colDraft[idx+1]]=[colDraft[idx+1],colDraft[idx]];drawCols();});
+      const n=c.id?countCards(c.id):0;
+      const del=el('button',{type:'button',className:'mini',textContent:'Apagar',title:'Apagar coluna'});
+      del.addEventListener('click',()=>{
+        if(n>0){
+          $('colWarn').textContent='Não é possível apagar "'+c.name+'" pois ela contém '+n+' card(s). Mova os cards para outra coluna antes de excluí-la.';
+          return;
+        }
+        colDraft.splice(idx,1);drawCols();
+      });
+
+      const sw=el('div',{className:'sw-group'});
+      SWATCHES.forEach(key=>{
+        const b=el('button',{type:'button',className:'sw'+(c.color===key?' on':''),
+          title:key,'aria-label':'Cor '+key,'aria-pressed':String(c.color===key)});
+        b.style.background=COLORS[key];
+        b.addEventListener('click',()=>{c.color=key;drawCols();});
+        sw.append(b);
+      });
+
+      list.append(el('div',{className:'sw-group'},sw));
+      list.append(el('div',{className:'row'},nameIn,up,down,del));
+    });
+  }
+
+  $('cols').addEventListener('click',()=>{
+    if(busy)return;
+    colDraft=board.columns.map(c=>({id:c.id,name:c.name,color:c.color}));
+    drawCols();
+    $('colDlg').showModal();
+  });
+  $('colAdd').addEventListener('click',()=>{
+    const name=$('colNew').value.trim();
+    if(!name||colDraft.length>=MAX_COLUMNS)return;
+    colDraft.push({name,color:SWATCHES[colDraft.length%SWATCHES.length]});
+    $('colNew').value='';
+    drawCols();
+  });
+  $('colForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(busy)return;
+    const columns=colDraft.map(c=>{
+      const out={name:c.name.trim(),color:c.color};
+      if(c.id)out.id=c.id;
+      return out;
+    });
+    if(columns.some(c=>!c.name)){setStatus('Toda coluna precisa de nome','err');return;}
+    $('colDlg').close();
+    setBusy(true,'Gravando colunas no GitHub…');
+    try{
+      await api('./api/columns',{project:currentId,columns});
+      setStatus('Colunas gravadas e confirmadas','ok');
+    }catch(err){
+      setStatus('Colunas não gravadas: '+err.message,'err');
+    }finally{
+      setBusy(false);
+      await load();
+    }
+  });
+  $('colCancel').addEventListener('click',()=>$('colDlg').close());
+  // Novo card: colId preenchido = coluna travada (botão da coluna); null = seletor livre (botão do topo).
+  function openCardDlg(colId){
+    if(busy||!board.columns.length)return;
+    const sel=$('cardCol');
+    sel.replaceChildren();
+    for(const c of board.columns)sel.append(el('option',{value:c.id,textContent:c.name}));
+    if(colId){sel.value=colId;sel.disabled=true;}
+    else{sel.disabled=false;sel.value=board.columns[0].id;}
+    $('cardTitle').value='';$('cardBody').value='';
+    $('cardDlg').showModal();
+    $('cardTitle').focus();
+  }
+  $('addCard').addEventListener('click',()=>openCardDlg(null));
+  $('cardCancel').addEventListener('click',()=>$('cardDlg').close());
+  $('cardForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(busy)return;
+    const title=$('cardTitle').value.trim();
+    const body=$('cardBody').value.trim();
+    const to=$('cardCol').value;
+    if(!title){setStatus('O card precisa de um título','err');$('cardTitle').focus();return;}
+    $('cardDlg').close();
+    setBusy(true,'Criando card no GitHub…');
+    try{
+      const r=await api('./api/cards/create',{project:currentId,title,body,to_column_id:to});
+      if(r.aviso)setStatus(r.aviso,'err');
+      else if(r.verified)setStatus('Card criado na coluna escolhida','ok');
+      else setStatus('Card criado, mas a coluna não foi confirmada','err');
+    }catch(err){
+      setStatus('Card não criado: '+err.message,'err');
+    }finally{
+      setBusy(false);
+      await load();
+    }
+  });
+  $('search').addEventListener('input',render);
+  $('refresh').addEventListener('click',()=>load());
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&Date.now()-lastFetch>60000&&!busy)load();
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
