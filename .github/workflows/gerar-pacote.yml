@@ -1,0 +1,158 @@
+name: "Fabrica de Ideias Kanban - Gerar pacote"
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "SHA completo (40 caracteres) de um commit da main aprovado"
+        required: true
+        type: string
+      expected_version:
+        description: "Versao exata esperada (ex.: 0.0.25)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kanban-gerar-pacote-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    name: Validar origem e gerar ZIP
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
+    steps:
+      - name: Obter historico do repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirmar commit aprovado e branch main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Execute na branch main"; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "SHA deve conter 40 caracteres hexadecimais minusculos"; exit 1; }
+          [[ "$EXPECTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Versao esperada invalida"; exit 1; }
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          git fetch --quiet --no-tags origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main || { echo "Commit fora do historico da main"; exit 1; }
+          git switch --detach --quiet "$SOURCE_SHA"
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || { echo "Commit de origem nao corresponde"; exit 1; }
+          echo "Origem verificada: $SOURCE_SHA / versao $EXPECTED_VERSION"
+
+      - name: Validar fonte da versao escolhida
+        run: python3 -B scripts/verificar-fonte.py
+
+      - name: Gerar ZIP com lista fechada e comprovar integridade
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
+
+          root = Path.cwd()
+          version = os.environ["EXPECTED_VERSION"]
+          source_sha = os.environ["SOURCE_SHA"]
+          if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != source_sha:
+              raise SystemExit("SHA do checkout diferente da entrada")
+
+          manifest = (root / "kanban/config.yaml").read_text(encoding="utf-8")
+          server = (root / "kanban/server.py").read_text(encoding="utf-8")
+          m1 = re.search(r"(?m)^version:\s*['\"]?([^'\"\s]+)", manifest)
+          m2 = re.search(r"(?m)^VERSION\s*=\s*['\"]([^'\"]+)['\"]", server)
+          if not m1 or not m2 or (m1.group(1), m2.group(1)) != (version, version):
+              raise SystemExit("Versao esperada nao corresponde ao manifesto e ao servidor")
+          if not re.search(r"(?m)^slug:\s*kanban\s*$", manifest):
+              raise SystemExit("Identidade do add-on alterada")
+
+          selected = [
+              Path("kanban/config.yaml"),
+              Path("kanban/Dockerfile"),
+              Path("kanban/server.py"),
+              Path("kanban/icon.png"),
+              Path("kanban/logo.png"),
+              Path("kanban/public/index.html"),
+          ]
+          patterns = (
+              re.compile(rb"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+              re.compile(rb"\bgithub_pat_[A-Za-z0-9_]{20,}"),
+              re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+          )
+          evidence = []
+          for rel in selected:
+              src = root / rel
+              if src.is_symlink() or not src.is_file() or src.stat().st_size == 0:
+                  raise SystemExit(f"Arquivo ausente, vazio ou link: {rel}")
+              data = src.read_bytes()
+              if any(p.search(data) for p in patterns):
+                  raise SystemExit(f"Possivel credencial no arquivo: {rel}")
+              evidence.append({"path": str(rel), "sha256": hashlib.sha256(data).hexdigest()})
+
+          out = root / "dist"
+          out.mkdir(exist_ok=True)
+          archive_name = f"kanban-{version}-{source_sha[:7]}.zip"
+          archive = out / archive_name
+          with ZipFile(archive, "w") as z:
+              for rel in sorted(selected, key=str):
+                  info = ZipInfo(str(rel), date_time=(1980, 1, 1, 0, 0, 0))
+                  info.create_system = 3
+                  info.external_attr = 0o100644 << 16
+                  info.compress_type = ZIP_DEFLATED
+                  z.writestr(info, (root / rel).read_bytes())
+
+          with ZipFile(archive) as z:
+              if set(z.namelist()) != {str(p) for p in selected} or z.testzip() is not None:
+                  raise SystemExit("ZIP contem arquivo inesperado ou corrompido")
+              for rel in selected:
+                  if z.read(str(rel)) != (root / rel).read_bytes():
+                      raise SystemExit(f"Conteudo diferente no ZIP: {rel}")
+
+          sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+          (out / f"{archive_name}.sha256").write_text(f"{sha256}  {archive_name}\n", encoding="utf-8")
+          (out / "build-info.json").write_text(
+              json.dumps({
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "source_sha": source_sha,
+                  "version": version,
+                  "archive": archive_name,
+                  "archive_sha256": sha256,
+                  "files": evidence,
+              }, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(f"OK: {archive_name}, 6 arquivos conferidos, SHA-256 {sha256}")
+          PY
+          cd dist
+          sha256sum -c ./*.sha256
+
+      - name: Guardar pacote e relatorio no GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: kanban-${{ inputs.expected_version }}-${{ github.run_id }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            dist/build-info.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Registrar evidencias da geracao
+        shell: bash
+        run: |
+          cat dist/build-info.json
+          echo "Pacote disponivel somente como artefato desta execucao; nenhuma instalacao foi realizada."
