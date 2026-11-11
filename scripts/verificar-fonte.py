@@ -29,7 +29,37 @@ if manifest.exists() and server.exists():
     token = re.search(r'^\s+github_token:\s*(.*)$', opts.group(1), re.M) if opts else None
     if not token or token.group(1).strip() not in ('""', "''", ''):
         errors.append("Valor padrão github_token deve estar vazio no manifesto público")
-    if not re.search(r'^\s*slug:\s*kanban\s*$', y, re.M):
+    owner_kind = re.search(r'^\s+github_owner_type:\s*["\']?([^"\'\s]+)', opts.group(1), re.M) if opts else None
+    schema = y.split("\nschema:", 1)[1] if "\nschema:" in y else ""
+    if not owner_kind or owner_kind.group(1) != "user":
+        errors.append("github_owner_type deve ter padrao user")
+    if not re.search(r'^\s+github_owner_type:\s*["\']list\(user\|organization\)["\']\s*
+        errors.append("Slug alterado; conferir compatibilidade antes da publicação")
+    try:
+        ast.parse(py, filename="server.py")
+    except SyntaxError:
+        errors.append("Sintaxe de server.py inválida")
+
+if errors:
+    for e in errors:
+        print("ERRO:", e)
+    sys.exit(1)
+print("OK: arquivos essenciais, versão coerente, manifesto sem token e sintaxe Python")
+, schema, re.M):
+        errors.append("Esquema github_owner_type deve permitir user e organization")
+    if not re.search(r'^\s*slug:\s*kanban\s*
+        errors.append("Slug alterado; conferir compatibilidade antes da publicação")
+    try:
+        ast.parse(py, filename="server.py")
+    except SyntaxError:
+        errors.append("Sintaxe de server.py inválida")
+
+if errors:
+    for e in errors:
+        print("ERRO:", e)
+    sys.exit(1)
+print("OK: arquivos essenciais, versão coerente, manifesto sem token e sintaxe Python")
+, y, re.M):
         errors.append("Slug alterado; conferir compatibilidade antes da publicação")
     try:
         ast.parse(py, filename="server.py")
