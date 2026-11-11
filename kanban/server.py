@@ -53,13 +53,14 @@ class Conflict(Exception):
 # Só as de leitura, movimentação, ordem e colunas foram testadas.
 # OWNER_QUERY, PROJECTS_QUERY, CREATE_MUTATION e o campo body em ITEMS_QUERY são novos.
 
+# O tipo vem de uma lista fechada: nunca inserir valores livres na consulta.
 OWNER_QUERY = """
-query($login: String!) { user(login: $login) { id } }
+query($login: String!) { owner: __OWNER_KIND__(login: $login) { id } }
 """
 
 PROJECTS_QUERY = """
 query($login: String!, $after: String) {
-  user(login: $login) {
+  owner: __OWNER_KIND__(login: $login) {
     projectsV2(first: 50, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes { id number title closed }
@@ -160,6 +161,7 @@ def load_options() -> dict:
 def cfg() -> dict:
     o = load_options()
     owner = str(o.get('github_owner') or '').strip()
+    owner_type = str(o.get('github_owner_type') or 'user').strip().lower()
     token = str(o.get('github_token') or '').strip()
     field = str(o.get('github_status_field') or 'Status').strip() or 'Status'
     try:
@@ -167,11 +169,14 @@ def cfg() -> dict:
     except (TypeError, ValueError):
         number = 0
     hidden = {int(n) for n in re.findall(r'\d+', str(o.get('github_hidden_projects') or ''))}
+    if owner_type not in ('user', 'organization'):
+        raise ConfigError('github_owner_type deve ser user ou organization')
     if not owner:
         raise ConfigError('Configure github_owner nas opções do add-on')
     if not token:
         raise ConfigError('Configure github_token nas opções do add-on')
-    return {'owner': owner, 'token': token, 'field': field, 'number': number, 'hidden': hidden}
+    return {'owner': owner, 'owner_type': owner_type, 'token': token,
+            'field': field, 'number': number, 'hidden': hidden}
 
 
 def load_order() -> list:
@@ -235,11 +240,22 @@ def rest_get(path: str) -> dict:
 
 # ---------- Quadros (Projects) ----------
 
+def owner_data(c: dict, *, projects: bool = False, after=None) -> dict:
+    """Seleciona conta pessoal ou organização sem duplicar a lógica dos quadros."""
+    kind = c.get('owner_type', 'user')
+    if kind not in ('user', 'organization'):
+        raise ConfigError('github_owner_type deve ser user ou organization')
+    query = (PROJECTS_QUERY if projects else OWNER_QUERY).replace('__OWNER_KIND__', kind)
+    variables = {'login': c['owner']}
+    if projects:
+        variables['after'] = after
+    return gql(query, variables).get('owner') or {}
+
+
 def all_projects(c: dict) -> list:
     out, after = [], None
     while True:
-        conn = (((gql(PROJECTS_QUERY, {'login': c['owner'], 'after': after}).get('user') or {})
-                 .get('projectsV2')) or {})
+        conn = owner_data(c, projects=True, after=after).get('projectsV2') or {}
         for p in conn.get('nodes', []):
             if p and not p.get('closed'):
                 out.append({'id': p['id'], 'number': p['number'], 'title': p['title']})
@@ -510,7 +526,7 @@ def create_project(p: dict, actor: str) -> dict:
         existing = all_projects(c)
         if any(x['title'].casefold() == title.casefold() for x in existing):
             raise ValueError('Já existe um quadro com este nome no GitHub')
-        owner_id = (gql(OWNER_QUERY, {'login': c['owner']}).get('user') or {}).get('id')
+        owner_id = owner_data(c).get('id')
         if not owner_id:
             raise ApiError('Não foi possível localizar o dono configurado')
         created = (gql(CREATE_MUTATION, {'owner': owner_id, 'title': title})
