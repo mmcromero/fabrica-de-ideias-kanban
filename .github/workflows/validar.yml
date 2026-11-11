@@ -67,6 +67,9 @@ jobs:
           print(f"OK: {len(tracked)} arquivos rastreados verificados; Python e HTML basico validos")
           PY
 
+      - name: Testar tipo de proprietario sem rede
+        run: python3 -B -m unittest discover -s tests -v
+
       - name: Construir imagem Docker de validacao
         run: docker build --tag kanban-validacao:local ./kanban
 

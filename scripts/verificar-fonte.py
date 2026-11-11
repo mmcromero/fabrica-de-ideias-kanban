@@ -29,6 +29,12 @@ if manifest.exists() and server.exists():
     token = re.search(r'^\s+github_token:\s*(.*)$', opts.group(1), re.M) if opts else None
     if not token or token.group(1).strip() not in ('""', "''", ''):
         errors.append("Valor padrão github_token deve estar vazio no manifesto público")
+    owner_options = opts.group(1) if opts else ""
+    schema = y.split("\nschema:", 1)[1] if "\nschema:" in y else ""
+    if '  github_owner_type: "user"' not in owner_options:
+        errors.append("github_owner_type deve ter padrao user")
+    if '  github_owner_type: "list(user|organization)"' not in schema:
+        errors.append("Esquema github_owner_type deve permitir user e organization")
     if not re.search(r'^\s*slug:\s*kanban\s*$', y, re.M):
         errors.append("Slug alterado; conferir compatibilidade antes da publicação")
     try:
