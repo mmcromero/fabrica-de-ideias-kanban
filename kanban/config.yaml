@@ -15,12 +15,14 @@ panel_title: "Kanban"
 options:
   github_token: ""
   github_owner: "mmcromero"
+  github_owner_type: "user"
   github_project_number: 0
   github_status_field: "Status"
   github_hidden_projects: ""
 schema:
   github_token: password
   github_owner: str
+  github_owner_type: "list(user|organization)"
   github_project_number: "int(0,)"
   github_status_field: str
   github_hidden_projects: "str?"
