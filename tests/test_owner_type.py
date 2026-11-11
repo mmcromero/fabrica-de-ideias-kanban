@@ -112,13 +112,13 @@ class OwnerQueryTests(unittest.TestCase):
 
                 def fake_gql(query, variables):
                     queries.append((query, variables))
-                    if "owner: " in query:
-                        return {"owner": {"id": f"{kind}-id"}}
                     if "createProjectV2" in query:
                         self.assertEqual(variables["owner"], f"{kind}-id")
                         return {"createProjectV2": {
                             "projectV2": {"id": "NEW_ID", "number": 12, "title": "Novo quadro"}
                         }}
+                    if f"owner: {kind}(login: $login)" in query:
+                        return {"owner": {"id": f"{kind}-id"}}
                     if "updateProjectV2Field" in query:
                         return {"updateProjectV2Field": {
                             "projectV2Field": {"options": [
