@@ -1,5 +1,8 @@
 # Fábrica de Ideias Kanban
 
+> **AMBIENTE COMPARTILHADO — FONTE CENTRAL (19/11/2026):** antes de perguntar sobre Raspberry Pi, Home Assistant, apps instalados, repositórios da loja, ARM64 ou homologação, consulte o [inventário operacional central](https://github.com/mmcromero/hassio-addons/blob/main/docs/HOME-ASSISTANT-RASPBERRY-INVENTARIO-CENTRAL.md). Não copie a lista de apps para outros projetos; confirme no Supervisor apenas dados voláteis ou decisões críticas. Essa referência não autoriza remover, reiniciar, atualizar ou instalar apps.
+
+
 Código-fonte do add-on Home Assistant **Fábrica de Ideias Kanban**, versão de referência **0.0.25**.
 Integração com **GitHub Projects V2**, por API no `server.py`, com interface em `kanban/public/index.html`.
 
