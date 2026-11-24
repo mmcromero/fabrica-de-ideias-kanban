@@ -1,3 +1,9 @@
+# P0 — Bootstrap universal GOV-ACT-001
+
+Leia a [fonte única central](https://github.com/mmcromero/governanca-master/blob/main/ATIVAR.md), a [GOV-STD-001 v1.1](https://github.com/mmcromero/fabricacao_e_orcamentos/blob/main/docs/operacao/GOV_STD_001.md) e o [mapa operacional de diretórios/esteiras](https://github.com/mmcromero/governanca-master/blob/main/docs/PORTFOLIO-ESTRUTURA-ESTEIRAS.md). Confirme versão/commit realmente acessados; falha de leitura = BLOQUEADO. /at e /atg são aliases conversacionais que exigem leitura real, não comandos nativos. AGENTS.md só orienta runtimes que o carregam; não sincroniza outros chats. Preserve as regras locais abaixo e não aplique a esteira de outro produto.
+
+---
+
 # Instruções para agentes
 
 
